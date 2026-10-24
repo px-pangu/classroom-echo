@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>课堂回声 · 大班课实时匿名提问与板书回顾系统</title>
+<style>
+:root{
+  --bg:#F5F6F4; --bg2:#FAFBF9; --card:#FFFFFF; --line:#E6E8E3; --line2:#D5D8D2;
+  --txt:#2A2E2C; --dim:#6E7470; --dim2:#A2A8A2;
+  --acc:#2F6F78; --acc2:#488A93; --accS:#EAF2F3; --accS2:#D3E5E8;
+  --ok:#3E7C5A; --okS:#EAF3EE; --amber:#A9752B; --amberS:#F8F0E4;
+  --red:#B4523F;
+  --mono:Consolas,"SFMono-Regular",Menlo,"Courier New",monospace;
+  --fs:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-size:var(--fs);
+  font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  line-height:1.75;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
+a{color:var(--acc2)}
+button{font-family:inherit;font-size:13px;color:var(--txt);cursor:pointer;
+  background:var(--card);border:1px solid var(--line2);border-radius:9px;padding:7px 15px;transition:.16s}
+button:hover{border-color:var(--acc);color:var(--acc)}
+button.primary{background:var(--acc);border-color:var(--acc);color:#F5F6F4;font-weight:600}
+button.primary:hover{background:var(--acc2);color:#fff}
+button.ghost{background:transparent;border-color:var(--line2);color:var(--dim)}
+button.sm{padding:4px 11px;font-size:12px;border-radius:7px}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:disabled:hover{border-color:var(--line2);color:var(--txt)}
+textarea,input[type=text]{font-family:inherit;font-size:13.5px;line-height:1.8;color:var(--txt);
+  width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 13px;
+  outline:none;transition:.18s;resize:vertical}
+textarea:focus,input[type=text]:focus{border-color:var(--acc);background:#fff}
+::placeholder{color:var(--dim2)}
+.mono{font-family:var(--mono)}
+
+/* ---------- 顶部 ---------- */
+header{position:sticky;top:0;z-index:60;background:rgba(245,246,244,.95);backdrop-filter:blur(9px);
+  border-bottom:1px solid var(--line)}
+.hd{max-width:1080px;margin:0 auto;padding:11px 22px 8px;display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.logo{display:flex;align-items:baseline;gap:9px}
+.logo h1{margin:0;font-size:17px;letter-spacing:2px;color:var(--acc);font-weight:700}
+.logo .en{font-family:var(--mono);font-size:9.5px;letter-spacing:3px;color:var(--dim2)}
+.hd .sp{flex:1}
+.pill{font-family:var(--mono);font-size:11px;border:1px solid var(--line2);border-radius:20px;
+  padding:3px 10px;background:var(--card);color:var(--dim);white-space:nowrap}
+.pill.on{border-color:var(--acc);color:var(--acc);background:var(--accS)}
+.pill.live{border-color:var(--ok);color:var(--ok);background:var(--okS)}
+nav.tabs{max-width:1080px;margin:0 auto;padding:0 22px 9px;display:flex;gap:6px;flex-wrap:wrap}
+nav.tabs button{border-radius:20px;padding:5px 13px;font-size:12.5px;color:var(--dim);background:transparent;border-color:transparent}
+nav.tabs button:hover{background:var(--card);border-color:var(--line2)}
+nav.tabs button.on{background:var(--acc);border-color:var(--acc);color:#F5F6F4;font-weight:600}
+
+/* ---------- 容器 ---------- */
+.wrap{position:relative;max-width:1080px;margin:0 auto;padding:18px 22px 70px}
+.view{display:none;animation:in .28s ease}
+.view.on{display:block}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.strip{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--acc);
+  border-radius:10px;padding:9px 14px;font-size:12.5px;color:var(--dim);margin-bottom:16px;
+  display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.strip b{color:var(--acc);font-weight:600}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:18px 20px}
+.panel h4{margin:0 0 12px;font-size:14.5px;font-weight:600;letter-spacing:.4px;
+  display:flex;align-items:center;gap:8px}
+.panel h4 .en{font-family:var(--mono);font-size:9.5px;letter-spacing:2px;color:var(--dim2);font-weight:400}
+.sub{margin:0 0 13px;font-size:12.5px;color:var(--dim)}
+.note{font-size:12px;color:var(--dim);background:var(--bg2);border:1px dashed var(--line2);
+  border-radius:9px;padding:9px 13px;margin-top:12px;line-height:1.75}
+.sec-h{display:flex;align-items:baseline;gap:10px;margin:0 0 3px}
+.sec-h .no{font-family:var(--mono);font-size:11.5px;color:var(--acc);letter-spacing:1.5px;opacity:.6}
+.sec-h h3{margin:0;font-size:16.5px;font-weight:600;letter-spacing:.5px}
+
+/* ---------- 问题中卡片 ---------- */
+.qfeed{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.qcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px;
+  display:flex;gap:12px;align-items:flex-start;transition:border-color .18s,box-shadow .18s,transform .18s;position:relative}
+.qcard:hover{border-color:var(--accS2);box-shadow:0 2px 12px rgba(47,111,120,.07)}
+.qcard .no{font-family:var(--mono);font-size:11px;color:var(--dim2);width:26px;flex:none;padding-top:3px}
+.qcard .bd{flex:1;min-width:0}
+.qcard .tx{margin:0 0 7px;font-size:14.5px;line-height:1.7;font-weight:500}
+.qcard .mt{display:flex;gap:7px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--dim2)}
+.tag{font-size:11px;border-radius:20px;padding:2px 9px;border:1px solid var(--line2);color:var(--dim);white-space:nowrap}
+.tag.hot{border-color:var(--accS2);background:var(--accS);color:var(--acc);font-weight:600}
+.tag.ok{border-color:#C8E0D1;background:var(--okS);color:var(--ok)}
+.tag.later{border-color:#EBD9BC;background:var(--amberS);color:var(--amber)}
+.tag.pin{border-color:var(--accS2);background:var(--accS);color:var(--acc)}
+.tag.kp{font-family:var(--mono);font-size:10.5px;color:var(--dim2)}
+.qcard .rt{flex:none;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.qcard.done{opacity:.62;background:var(--bg2)}
+.qcard.sel{border-color:var(--acc);box-shadow:0 0 0 3px var(--accS)}
+.qcard.pinned{border-left:3px solid var(--acc)}
+.hotbar{height:3px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:8px}
+.hotbar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));transition:width .4s}
+.btnplus{font-size:12px;padding:4px 12px;border-radius:20px;white-space:nowrap}
+.mine{border-color:var(--acc);color:var(--acc)}
+.empty{border:1px dashed var(--line2);border-radius:11px;padding:26px;text-align:center;color:var(--dim2);font-size:13px;background:var(--bg2)}
+
+/* ---------- 提问框 ---------- */
+.askbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 17px}
+.askrow{display:flex;gap:10px;align-items:flex-start}
+.askrow textarea{flex:1;min-height:62px;font-size:14.5px}
+.cntrow{display:flex;justify-content:space-between;align-items:center;margin-top:6px;
+  font-family:var(--mono);font-size:11px;color:var(--dim2)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;align-items:center}
+.chips .lb{font-family:var(--mono);font-size:10.5px;color:var(--dim2)}
+.opt{border:1px solid var(--line2);background:var(--bg2);border-radius:20px;padding:3px 11px;
+  font-size:12px;color:var(--dim);cursor:pointer;transition:.15s;user-select:none}
+.opt:hover{border-color:var(--acc);color:var(--acc);background:var(--accS)}
+.clklog{font-family:var(--mono);font-size:11px;color:var(--dim2);margin-top:10px}
+.clklog b{color:var(--acc)}
+
+/* ---------- 二维码 ---------- */
+.qr{width:96px;height:96px;flex:none;border:1px solid var(--line);border-radius:9px;background:#fff;padding:5px}
+.scanline{display:flex;gap:14px;align-items:center}
+
+/* ---------- 教师三键 ---------- */
+.big3{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-bottom:15px}
+.big3 button{padding:16px 12px;font-size:15px;font-weight:600;border-radius:12px;border-width:1.5px;
+  background:var(--card);border-color:var(--line2)}
+.big3 button span{display:block;font-family:var(--mono);font-size:10px;letter-spacing:1.5px;
+  color:var(--dim2);font-weight:400;margin-top:3px}
+.big3 button:hover{border-color:var(--acc);color:var(--acc)}
+.big3 button.k1:hover{border-color:var(--ok);color:var(--ok)}
+.big3 button.k2:hover{border-color:var(--amber);color:var(--amber)}
+.big3 button:disabled{opacity:.45}
+
+/* ---------- 回放 ---------- */
+.rep-grid{display:grid;grid-template-columns:322px 1fr;gap:16px;align-items:start}
+.player{background:var(--bg2);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.screen{height:172px;position:relative;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(160deg,#E8EEED,#F2F5F4)}
+.screen svg{opacity:.9}
+.pb-wrap{position:absolute;left:0;right:0;bottom:0;height:34px;padding:0 12px;
+  display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.86);backdrop-filter:blur(4px)}
+.pb{flex:1;height:4px;background:var(--line);border-radius:3px;position:relative;cursor:pointer}
+.pb i{position:absolute;left:0;top:0;bottom:0;background:var(--acc);border-radius:3px;transition:width .2s}
+.pb .mk{position:absolute;top:-3px;width:2px;height:10px;background:var(--amber);opacity:.8}
+.tm{font-family:var(--mono);font-size:11.5px;color:var(--dim);white-space:nowrap}
+.playbar{display:flex;gap:7px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);flex-wrap:wrap}
+.board{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-top:13px;padding:13px 15px}
+.board .bh{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--dim);margin-bottom:9px;flex-wrap:wrap;gap:8px}
+.board svg{width:100%;height:auto;display:block;background:#FCFDFC;border:1px solid var(--line);border-radius:9px}
+.board svg text{font-family:"KaiTi","STKaiti","Kaiti SC",serif;fill:var(--txt)}
+.board svg .stroke{fill:none;stroke:var(--acc);stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+.board svg .light{stroke:var(--acc2);stroke-width:1.6;opacity:.65}
+.board svg .box{fill:none;stroke:var(--line2);stroke-width:1.4}
+.board svg .hl{fill:var(--amberS);stroke:var(--amber);stroke-width:1.4}
+.rep-list{max-height:520px;overflow:auto;padding-right:3px}
+.rep-list .qcard{padding:11px 12px}
+.rep-list .qcard.cur{border-color:var(--acc);background:var(--accS)}
+
+/* ---------- 助教清单 ---------- */
+.rv{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:14px 16px;margin-top:12px}
+.rv .rh{display:flex;gap:9px;align-items:center;font-size:13px;font-weight:600;margin-bottom:7px;flex-wrap:wrap}
+.rv .rh .ty{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--acc);
+  border:1px solid var(--accS2);background:var(--accS);border-radius:20px;padding:1px 8px;font-weight:400}
+.rv ul{margin:5px 0 0;padding-left:18px;font-size:12.5px;color:var(--dim);line-height:1.85}
+.secgrp{margin-top:16px}
+.sechead{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--acc);font-weight:600;
+  border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:9px}
+.sechead .n{font-family:var(--mono);font-size:10.5px;background:var(--accS);border-radius:5px;padding:1px 7px;color:var(--acc)}
+.copybox{font-family:var(--mono);font-size:11.5px;line-height:1.7;background:var(--bg2);border:1px solid var(--line);
+  border-radius:10px;padding:12px 14px;white-space:pre-wrap;max-height:280px;overflow:auto;color:var(--dim)}
+
+/* ---------- 后台 ---------- */
+.sw{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.sw:last-child{border-bottom:none}
+.sw .nm{font-size:13px}
+.sw .nm em{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim2);font-style:normal;margin-top:1px}
+.sw .st{font-size:11.5px;color:var(--dim2);white-space:nowrap;font-family:var(--mono)}
+.sw .st.no{color:var(--ok)}
+.sw .st.lock{color:var(--red)}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:none}
+.kv b{font-family:var(--mono);font-weight:600;color:var(--acc)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);color:var(--dim)}
+th{color:var(--dim2);font-family:var(--mono);font-size:10.5px;letter-spacing:1px;font-weight:400}
+td b{color:var(--txt);font-weight:600}
+
+/* ---------- toast ---------- */
+#toast{position:fixed;right:20px;bottom:20px;z-index:99;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.tst{background:var(--acc);color:#F5F6F4;border-radius:10px;padding:9px 14px;font-size:12.5px;
+  box-shadow:0 6px 22px rgba(47,111,120,.24);animation:tin .25s ease;max-width:340px;line-height:1.6}
+.tst.warn{background:var(--amber)}
+.tst.ok{background:var(--ok)}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+footer{max-width:1080px;margin:0 auto;padding:16px 22px 40px;color:var(--dim2);font-size:11.5px;line-height:1.8}
+footer b{color:var(--dim)}
+
+/* ---------- 投影模式：高对比大字 ---------- */
+body.proj{--bg:#0D1416;--bg2:#131C1F;--card:#18232A;--line:#2A383E;--line2:#3A4C54;
+  --txt:#EFF5F6;--dim:#A9BFC6;--dim2:#7E959C;--acc:#5FD8CB;--acc2:#8BE7DC;
+  --accS:#123033;--accS2:#1D4A4E;--ok:#6FD3A0;--okS:#143026;--amber:#F0B661;--amberS:#33270F;
+  --fs:16px}
+body.proj header{background:rgba(13,20,22,.95);border-color:var(--line)}
+body.proj .strip,body.proj .note,body.proj .copybox,body.proj .empty,body.proj .opt{background:var(--bg2)}
+body.proj .screen{background:linear-gradient(160deg,#1A262B,#223138)}
+body.proj .pb-wrap{background:rgba(24,35,42,.88)}
+body.proj .qr{background:#0D1416;border-color:var(--line2)}
+body.proj .board svg{background:#101A1E;border-color:var(--line)}
+body.proj .qcard .tx{font-size:19px}
+body.proj .rep-list .qcard .tx{font-size:16px}
+body.proj .tag{font-size:12.5px;padding:3px 12px}
+body.proj .big3 button{font-size:20px;padding:20px 12px}
+body.proj textarea,body.proj input[type=text]{background:var(--bg2);font-size:16px}
+body.proj .sec-h h3{font-size:22px}
+
+@media(max-width:860px){
+  .grid2,.grid3,.big3,.rep-grid{grid-template-columns:1fr}
+  .rep-list{max-height:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hd">
+    <div class="logo"><h1>课堂回声</h1><span class="en">CLASSROOM ECHO</span></div>
+    <span class="pill">理论力学 · 第 7 讲</span>
+    <span class="sp"></span>
+    <span class="pill on" id="onlinePill">在线 287 / 300</span>
+    <button class="sm ghost" id="simBtn">模拟课堂：关</button>
+    <button class="sm" id="projBtn">投影模式</button>
+  </div>
+  <nav class="tabs">
+    <button class="on" data-v="student">01 学生提问端</button>
+    <button data-v="teacher">02 教师课堂端</button>
+    <button data-v="assistant">03 助教课后端</button>
+    <button data-v="replay">04 回放回顾端</button>
+    <button data-v="admin">05 课程管理后台</button>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <div class="strip">
+    <span><b>匿名保证</b> · 不采集 IP 地址 / 设备指纹 / 学号</span>
+    <span><b>无</b> 积分 · 排行榜 · 签到打卡</span>
+    <span><b>删除问题</b> 只删文本，匿名计数保留</span>
+    <span><b>聚类</b> P95 ≤ 3s</span>
+  </div>
+
+  <!-- ============ 01 学生端 ============ -->
+  <section class="view on" id="v-student">
+    <div class="sec-h"><span class="no">01</span><h3>学生提问端</h3><span class="en">STUDENT</span></div>
+    <p class="sub">扫码即用，零注册、零授权。提问全程 2 次点击：扫码进入 → 写下一句问题 → 提交。</p>
+
+    <div class="grid2">
+      <div class="panel">
+        <h4>课堂二维码 <span class="en">10 MIN ROTATION</span></h4>
+        <div class="scanline">
+          <div class="qr" id="qrBox"></div>
+          <div style="font-size:12.5px;color:var(--dim);line-height:1.9">
+            <div style="color:var(--txt);font-weight:600">理论力学 · 第 7 讲</div>
+            <div>虚功原理与约束反力</div>
+            <div class="mono" style="font-size:11px;color:var(--dim2)">教室 A-305 · 票据有效期 10 分钟</div>
+            <div class="mono" style="font-size:11px;color:var(--dim2)">二维码剩余 <span id="qrLeft" style="color:var(--acc)">06:12</span></div>
+          </div>
+        </div>
+        <div class="note">进入后不读取任何身份信息：无登录、无学号绑定、无通讯录授权，页面上不显示你的名字、头像或座位。</div>
+      </div>
+
+      <div class="panel">
+        <h4>我的疑问 <span class="en">2 CLICKS</span></h4>
+        <div class="askbox">
+          <div class="askrow">
+            <textarea id="qText" maxlength="60" placeholder="把没听懂的地方写一句话，例如：为什么这里要用无穷小？"></textarea>
+            <button class="primary" id="askBtn" style="padding:10px 18px;align-self:stretch">提问</button>
+          </div>
+          <div class="cntrow">
+            <span id="qCount">0 / 60</span>
+            <span>讲课进行至 <b id="liveClock" style="color:var(--acc)">12:22</b> · 提问将绑定此刻</span>
+            <span id="clkHint">点击计数 0</span>
+          </div>
+          <div class="chips">
+            <span class="lb">同学习惯性疑问：</span>
+            <span class="opt" data-quick="虚位移为什么一定要取无穷小？">虚位移为什么要无穷小？</span>
+            <span class="opt" data-quick="理想约束是不是只是一种假设？">理想约束是假设吗？</span>
+            <span class="opt" data-quick="虚功原理和牛顿第二定律等价吗？">虚功原理=牛顿第二定律？</span>
+            <span class="opt" data-quick="板书第三步的两个虚位移为什么同号？">板书第三步为啥同号？</span>
+            <span class="opt" data-quick="作业第三题的方法老师能再讲一遍吗？">作业第三题能再讲一遍吗？</span>
+          </div>
+          <div class="clklog" id="clkLog">当前状态：等待第 1 次点击（进入提问）</div>
+        </div>
+        <div class="note" style="margin-top:11px">提交后系统立即做语义聚类：若已有人提过相同疑惑，你的问题会并入该条并让「+N」加一；没有人提过则新建一条。</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h4>当前课堂疑问流 <span class="en">SEMANTIC CLUSTERS · SORTED BY HEAT</span></h4>
+      <p class="sub" style="margin-bottom:8px">按热度（人数 × 时间衰减）降序。每张卡片不显示任何提问者身份，只有人数与时间。</p>
+      <div class="qfeed" id="stuFeed"></div>
+    </div>
+  </section>
+
+  <!-- ============ 02 教师端 ============ -->
+  <section class="view" id="v-teacher">
+    <div class="sec-h"><span class="no">02</span><h3>教师课堂端</h3><span class="en">TEACHER · LIVE</span></div>
+    <p class="sub">讲课不停顿。首屏只有三个操作按钮，队列默认选中热度最高的一条，处理只需 1 次点击。</p>
+
+    <div class="big3">
+      <button class="k1" id="btnAns">标记「已答」<span>DONE</span></button>
+      <button class="k2" id="btnLater">标记「课后答」<span>AFTER CLASS</span></button>
+      <button id="btnPin">上屏追问<span>PROJECT IT</span></button>
+    </div>
+
+    <div class="grid2" style="grid-template-columns:1.6fr 1fr">
+      <div class="panel">
+        <h4>疑问队列 <span class="en">HEAT RANK</span></h4>
+        <p class="sub" style="margin-bottom:8px" id="tchMeta">待处理 0 条 · 已答 0 条 · 课后答 0 条</p>
+        <div class="qfeed" id="tchFeed"></div>
+      </div>
+      <div>
+        <div class="panel">
+          <h4>投影模式 <span class="en">HIGH CONTRAST</span></h4>
+          <p class="sub">教室投影多为远距离观看，切换后为深色高对比大字，正文字号 ≥ 28px（本页 16px 基准 × 1.75 显示层）。</p>
+          <button class="ghost" id="projBtn2" style="width:100%">切换投影大字模式</button>
+          <div class="note">投影视图只显示问题文本与「+N 人」，不显示任何提问者身份字段。</div>
+        </div>
+        <div class="panel" style="margin-top:14px">
+          <h4>为什么只有三个按钮 <span class="en">DESIGN RULE</span></h4>
+          <ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--dim);line-height:1.9">
+            <li>讲课中被第四件事分心，提问功能就会被放弃</li>
+            <li>「已答」解决当下，「课后答」解决承诺，「上屏」解决共性</li>
+            <li>其余动作（删除、合并、导出）全部后置到课后端</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 03 助教端 ============ -->
+  <section class="view" id="v-assistant">
+    <div class="sec-h"><span class="no">03</span><h3>助教课后端</h3><span class="en">TA · AFTER CLASS</span></div>
+    <p class="sub">下课后一键生成未答清单：按知识点自动归类到课程章节，并生成 3 道可用于下节课开头的回顾题。</p>
+
+    <div class="panel">
+      <h4>生成未答问题清单 <span class="en">ONE CLICK</span></h4>
+      <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+        <button class="primary" id="genBtn">生成清单 + 3 道回顾题</button>
+        <span class="pill" id="taMeta">未答 0 条 · 课后答 0 条</span>
+        <button class="ghost sm" id="copyBtn" disabled>复制 Markdown</button>
+      </div>
+      <div id="taOut"></div>
+    </div>
+  </section>
+
+  <!-- ============ 04 回放端 ============ -->
+  <section class="view" id="v-replay">
+    <div class="sec-h"><span class="no">04</span><h3>回放回顾端</h3><span class="en">REPLAY · BOARD SYNC</span></div>
+    <p class="sub">每个疑问绑定提问时刻的时间戳，点击即跳转回放并切换到当时的板书切片；课后仍可匿名 +1。</p>
+
+    <div class="rep-grid">
+      <div class="panel">
+        <h4>本节疑问 <span class="en">TIMESTAMPED</span></h4>
+        <div class="qfeed rep-list" id="repList"></div>
+      </div>
+      <div>
+        <div class="player">
+          <div class="screen">
+            <svg width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+              <circle cx="30" cy="30" r="26" fill="none" stroke="#2F6F78" stroke-width="1.6" opacity=".45"/>
+              <path d="M25 20 L40 30 L25 40 Z" fill="#2F6F78" opacity=".85"/>
+            </svg>
+            <div class="pb-wrap">
+              <span class="tm" id="curTm">00:00</span>
+              <div class="pb" id="pb"><i style="width:0%"></i></div>
+              <span class="tm">45:00</span>
+            </div>
+          </div>
+          <div class="playbar">
+            <button class="sm" id="playBtn">播放</button>
+            <button class="sm ghost" id="backBtn">−10s</button>
+            <button class="sm ghost" id="fwdBtn">+10s</button>
+            <span class="pill" id="nowSec">未定位</span>
+          </div>
+        </div>
+        <div class="board">
+          <div class="bh">
+            <span>同步板书切片 · <b id="sliceName" class="mono">#—</b></span>
+            <span class="mono" id="sliceTm">—</span>
+          </div>
+          <div id="boardBox"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 05 后台 ============ -->
+  <section class="view" id="v-admin">
+    <div class="sec-h"><span class="no">05</span><h3>课程管理后台</h3><span class="en">ADMIN · COURSE OPS</span></div>
+    <p class="sub">管课次、录源与合规。隐私开关为系统级禁用，管理员无法开启，删除问题时匿名计数强制保留。</p>
+
+    <div class="grid2">
+      <div class="panel">
+        <h4>匿名策略 <span class="en">DISABLED BY DESIGN</span></h4>
+        <div class="sw"><div class="nm">IP 地址采集<em>ip_address</em></div><span class="st lock">强制关闭 · 不可开启</span></div>
+        <div class="sw"><div class="nm">设备指纹 / UA 追踪<em>device_fingerprint</em></div><span class="st lock">强制关闭 · 不可开启</span></div>
+        <div class="sw"><div class="nm">学号 / 姓名绑定<em>student_id</em></div><span class="st lock">强制关闭 · 不可开启</span></div>
+        <div class="sw"><div class="nm">定位与座位推断<em>seat_inference</em></div><span class="st lock">强制关闭 · 不可开启</span></div>
+        <div class="sw"><div class="nm">积分激励<em>points</em></div><span class="st no">永不提供</span></div>
+        <div class="sw"><div class="nm">排行榜<em>leaderboard</em></div><span class="st no">永不提供</span></div>
+        <div class="sw"><div class="nm">签到打卡<em>check_in</em></div><span class="st no">永不提供</span></div>
+        <div class="note">删除问题时仅移除问题文本，匿名计数与知识点标签计入教学档案保留。</div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h4>运行指标 <span class="en">SLO</span></h4>
+          <div class="kv"><span>当前并发匿名票据</span><b id="m1">287 / 300</b></div>
+          <div class="kv"><span>写请求延迟 P95</span><b>210 ms</b></div>
+          <div class="kv"><span>聚类端到端 P95</span><b id="m3">2.4 s</b></div>
+          <div class="kv"><span>板书切片索引</span><b>142 帧 / 45 min</b></div>
+          <div class="kv"><span>提问 → 上屏平均</span><b>1.3 s</b></div>
+          <div class="kv"><span>身份字段落库数</span><b>0</b></div>
+        </div>
+        <div class="panel" style="margin-top:14px">
+          <h4>数据留存 <span class="en">RETENTION</span></h4>
+          <div class="kv"><span>原始提问文本</span><b>30 天</b></div>
+          <div class="kv"><span>匿名计数 + 知识点标签</span><b>长期保留</b></div>
+          <div class="kv"><span>录屏与板书切片</span><b>学期结束 + 90 天</b></div>
+          <div class="kv"><span>观看进度（本地）</span><b>仅本机</b></div>
+          <button class="ghost sm" id="exportBtn" style="margin-top:10px">导出学期匿名统计（CSV）</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h4>本学期课次 <span class="en">SESSIONS</span></h4>
+      <table>
+        <tr><th>讲次</th><th>主题</th><th>匿名问题</th><th>合并后簇</th><th>已答率</th><th>未答转回顾题</th><th>录屏</th></tr>
+        <tr><td><b>第 7 讲</b></td><td>虚功原理与约束反力</td><td>143</td><td id="cCluster">6</td><td id="cRate">—</td><td id="cRv">—</td><td>已接入</td></tr>
+        <tr><td>第 6 讲</td><td>达朗贝尔原理</td><td>118</td><td>9</td><td>89%</td><td>3</td><td>已接入</td></tr>
+        <tr><td>第 5 讲</td><td>质点系动量矩</td><td>96</td><td>7</td><td>92%</td><td>3</td><td>已接入</td></tr>
+        <tr><td>第 4 讲</td><td>动能定理</td><td>102</td><td>8</td><td>85%</td><td>3</td><td>归档</td></tr>
+      </table>
+      <div class="note">课次表不出现任何学生身份聚合值；「匿名问题」为去重前的提交次数，「合并后簇」为语义聚类结果。</div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <b>课堂回声</b> · 大班课实时匿名提问与板书回顾系统 ｜ 隐私清单：IP 地址、设备指纹、学号、姓名、座位均不采集；无 cookies、无登录态、不使用通讯录授权；无积分、无排行榜、无签到打卡。
+</footer>
+
+<div id="toast"></div>
+
+<script>
+/* ================= 数据 ================= */
+var DUR = 2700; // 45:00
+var STATE = [
+  {id:1,text:'虚位移为什么一定要取「无穷小」？',n:9,t:742,sec:'2.1 虚位移',
+   st:'open',kws:['虚位移','无穷小','无限小','微小','极限'],
+   ask:'判断并说理：把虚位移取成有限大小，虚功方程还成立吗？',
+   pts:['虚位移是为检验平衡虚构的位移，不参与时间演化','取有限位移会改变约束力方向与几何关系，方程不再等价']},
+  {id:2,text:'理想约束到底是不是一种假设？现实中怎么保证？',n:6,t:1105,sec:'2.3 理想约束',
+   st:'open',kws:['理想约束','假设','现实','摩擦','保证'],
+   ask:'给一个「看起来是理想约束、实际会耗散能量」的例子，并指出虚功方程差在哪一项。',
+   pts:['理想约束要求约束力在任意虚位移上做功为零','含摩擦的约束需把耗散功移到方程右端，否则失衡']},
+  {id:3,text:'虚功原理和牛顿第二定律是等价的吗？',n:8,t:1580,sec:'2.4 原理表述',
+   st:'open',kws:['等价','牛顿','牛二','第二定律','推导'],
+   ask:'用一句话说明：两者在静力学问题里结论一致，为何方法不等价。',
+   pts:['静力平衡时二者解空间一致','虚功原理消去未知约束力，方程数与自由度挂钩，牛二则需全部力平衡']},
+  {id:4,text:'板书第三步：两个虚位移为什么要取同号？',n:4,t:1980,sec:'3 · 例题与易错点',
+   st:'open',kws:['板书','第三步','同号','符号','负号'],
+   ask:'若把两个虚位移取反号，重算例题的平衡条件，说明符号约定从哪里来。',
+   pts:['虚位移方向由所选广义坐标正向决定','独立坐标不得各自约定方向，否则虚功求和失去物理意义']},
+  {id:5,text:'这节会考拉格朗日方程吗？题型大概什么样？',n:3,t:2310,sec:'4 · 考核说明',
+   st:'open',kws:['考','题型','拉格朗日','作业','考试'],
+   ask:'判断：虚功原理能解的问题，拉格朗日方程一定能解吗？给出判断题理由。',
+   pts:['拉格朗日方程可由虚功原理加达朗贝尔原理导出','考试边界以本章末的「会 / 不会」清单为准，不超纲']}
+];
+var SEQ = 6, MY = [];   // MY：本机标记过的簇 id，用于「+1 已计入」提示
+var clicks = 0, simTimer = null, simOn = false;
+var playT = 0, playing = false, playTimer = null, curQ = null;
+var clock = 742;        // 讲课进行时刻（秒），新提问的时间戳取此值
+
+/* 板书切片（按时间戳） */
+var SLICES = [
+  {t:0,   name:'#封面 · 第 7 讲', svg:'title'},
+  {t:742, name:'#2 · 虚位移定义', svg:'delta'},
+  {t:1105,name:'#3 · 理想约束', svg:'ideal'},
+  {t:1580,name:'#4 · 虚功原理表述', svg:'prin'},
+  {t:1980,name:'#5 · 例题演算', svg:'ex'},
+  {t:2310,name:'#6 · 小结与易错点', svg:'sum'}
+];
+
+/* ================= 工具 ================= */
+function $(id){return document.getElementById(id)}
+function fmt(s){s=Math.max(0,Math.round(s));var m=Math.floor(s/60),x=s%60;
+  return (m<10?'0':'')+m+':'+(x<10?'0':'')+x}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function toast(msg,kind){
+  var d=document.createElement('div');d.className='tst'+(kind?' '+kind:'');d.textContent=msg;
+  $('toast').appendChild(d);
+  setTimeout(function(){d.style.transition='opacity .3s';d.style.opacity='0';
+    setTimeout(function(){d.remove()},320)},2600);
+}
+function uuid(){return 'a'+Math.random().toString(36).slice(2,9)}
+
+/* ================= 渲染：问题卡 ================= */
+function heatRank(list){
+  return list.slice().sort(function(a,b){
+    if(a.st==='done'&&b.st!=='done')return 1;
+    if(b.st==='done'&&a.st!=='done')return -1;
+    return b.n-a.n || b.t-a.t;
+  });
+}
+function tagOf(q){
+  var t='<span class="tag hot">+'+q.n+' 人有同样疑问</span>';
+  if(q.st==='done')t+='<span class="tag ok">已答</span>';
+  if(q.st==='later')t+='<span class="tag later">课后答</span>';
+  if(q.pinned)t+='<span class="tag pin">已上屏</span>';
+  t+='<span class="tag kp">'+fmt(q.t)+'</span>';
+  if(q.sec)t+='<span class="tag kp">'+esc(q.sec)+'</span>';
+  return t;
+}
+function renderAll(){
+  var pool=heatRank(STATE);
+  var maxN=Math.max.apply(null,pool.map(function(q){return q.n}));
+  // 学生端
+  $('stuFeed').innerHTML = pool.map(function(q){
+    var mine=MY.indexOf(q.id)>=0;
+    return '<div class="qcard'+(q.st==='done'?' done':'')+(q.pinned?' pinned':'')+'">'
+      +'<div class="no">#'+q.id+'</div><div class="bd">'
+      +'<p class="tx">'+esc(q.text)+'</p><div class="mt">'+tagOf(q)+'</div>'
+      +'<div class="hotbar"><i style="width:'+Math.round(q.n/maxN*100)+'%"></i></div>'
+      +'</div><div class="rt">'
+      +'<button class="sm btnplus'+(mine?' mine':'')+'" data-plus="'+q.id+'">'
+      +(mine?'已计入 +1':'+1 我也有此问')+'</button></div></div>';
+  }).join('');
+  // 教师端
+  $('tchFeed').innerHTML = pool.map(function(q){
+    return '<div class="qcard'+(q.st==='done'?' done':'')+(curQ===q.id?' sel':'')+'" data-sel="'+q.id+'">'
+      +'<div class="no">#'+q.id+'</div><div class="bd">'
+      +'<p class="tx">'+esc(q.text)+'</p><div class="mt">'+tagOf(q)+'</div>'
+      +'<div class="hotbar"><i style="width:'+Math.round(q.n/maxN*100)+'%"></i></div>'
+      +'</div></div>';
+  }).join('') || '<div class="empty">暂无疑问</div>';
+  var open=STATE.filter(function(q){return q.st==='open'}).length;
+  var done=STATE.filter(function(q){return q.st==='done'}).length;
+  var later=STATE.filter(function(q){return q.st==='later'}).length;
+  $('tchMeta').textContent='待处理 '+open+' 条 · 已答 '+done+' 条 · 课后答 '+later+' 条 · 讲课 '+fmt(clock);
+  $('taMeta').textContent='未答 '+open+' 条 · 课后答 '+later+' 条';
+  $('cCluster').textContent=STATE.length;
+  $('cRate').textContent = Math.round(done/STATE.length*100)+'%';
+  // 回放端
+  curQ = (curQ && STATE.some(function(q){return q.id===curQ})) ? curQ : null;
+  $('repList').innerHTML = heatRank(STATE).map(function(q){
+    return '<div class="qcard'+(curQ===q.id?' cur':'')+'" data-jump="'+q.t+'" data-qid="'+q.id+'">'
+      +'<div class="no">#'+q.id+'</div><div class="bd">'
+      +'<p class="tx" style="font-size:13.5px">'+esc(q.text)+'</p>'
+      +'<div class="mt">'+tagOf(q)+'</div></div></div>';
+  }).join('');
+}
+
+/* ================= 01 学生提问 ================= */
+function addQuestion(text){
+  var lk = String(text).toLowerCase();
+  var hit = null, best = 0;
+  STATE.forEach(function(q){
+    var s=0; q.kws.forEach(function(k){ if(lk.indexOf(k)>=0) s++ });
+    if(s>best){best=s;hit=q}
+  });
+  return hit;
+}
+$('qText').addEventListener('input',function(){
+  $('qCount').textContent=this.value.length+' / 60';
+});
+document.addEventListener('click',function(e){
+  var t=e.target;
+  if(t.classList && t.classList.contains('opt') && t.dataset.quick){
+    $('qText').value=t.dataset.quick; $('qCount').textContent=t.dataset.quick.length+' / 60';
+  }
+});
+function bumpClicks(){
+  clicks++; $('clkHint').textContent='点击计数 '+clicks;
+  $('clkLog').innerHTML = clicks===0 ? '当前状态：等待第 1 次点击（进入提问）'
+    : clicks===1 ? '当前状态：已完成 <b>1</b> 次点击，提交后正好 <b>2</b> 次'
+    : '当前状态：<b>'+clicks+'</b> 次点击 — 超过 2 次请回滚为一屏一步的极简路径';
+}
+document.addEventListener('click',function(){ bumpClicks() });
+
+$('askBtn').addEventListener('click',function(){
+  var v=$('qText').value.trim();
+  if(!v){ toast('先写一句话再提问','warn'); return }
+  if(v.length<4){ toast('太短了，至少写 4 个字','warn'); return }
+  var btn=this; btn.disabled=true; btn.textContent='聚类中…';
+  var t0=Date.now();
+  setTimeout(function(){
+    var cost=((Date.now()-t0)/1000).toFixed(1);
+    var hit=addQuestion(v);
+    if(hit){
+      hit.n++; if(MY.indexOf(hit.id)<0)MY.push(hit.id);
+      toast('已并入 #'+hit.id+'「'+hit.text.slice(0,12)+'…」· 现在 +'+hit.n+' 人 · 聚类 '+cost+'s（≤3s）','ok');
+    }else{
+      var q={id:SEQ++,text:v,n:1,t:clock,sec:'5 · 课堂即时疑问',
+        st:'open',kws:[],ask:'',pts:[]};
+      STATE.push(q); if(MY.indexOf(q.id)<0)MY.push(q.id);
+      toast('你是第一个提这条的，已建立新疑问 #'+q.id+' · 聚类 '+cost+'s（≤3s）','ok');
+    }
+    $('qText').value=''; $('qCount').textContent='0 / 60';
+    btn.disabled=false; btn.textContent='提问';
+    renderAll();
+  }, 900 + Math.random()*700);
+});
+// 学生端 +1
+$('stuFeed').addEventListener('click',function(e){
+  var id=e.target.dataset && e.target.dataset.plus;
+  if(!id)return;
+  var q=STATE.filter(function(x){return x.id==id})[0]; if(!q)return;
+  if(MY.indexOf(q.id)>=0){ toast('你已计入这条，撤回不留下任何痕迹'); return }
+  q.n++; MY.push(q.id); renderAll();
+  toast('已匿名 +1 · 现在 '+q.n+' 人有同样疑问');
+});
+
+/* ================= 02 教师三键 ================= */
+$('tchFeed').addEventListener('click',function(e){
+  var c=e.target.closest ? e.target.closest('[data-sel]') : null;
+  if(!c)return; curQ=parseInt(c.dataset.sel,10); renderAll();
+});
+function current(){
+  var q = curQ ? STATE.filter(function(x){return x.id===curQ})[0] : null;
+  if(!q){ q = heatRank(STATE.filter(function(x){return x.st!=='done'}))[0]; }
+  if(q) curQ=q.id;
+  return q;
+}
+function nextOpen(){
+  var l=heatRank(STATE.filter(function(x){return x.st==='open'}));
+  return l.length ? l[0].id : null;
+}
+$('btnAns').addEventListener('click',function(){
+  var q=current(); if(!q)return;
+  q.st='done'; curQ=nextOpen(); renderAll();
+  toast('已标记「已答」#'+q.id+' · 已自动跳到下一条热点 · 时间戳 '+fmt(q.t),'ok');
+});
+$('btnLater').addEventListener('click',function(){
+  var q=current(); if(!q)return;
+  q.st='later'; curQ=nextOpen(); renderAll();
+  toast('转入课后答 #'+q.id+' · 已自动跳到下一条 · 已加入助教未答清单','warn');
+});
+$('btnPin').addEventListener('click',function(){
+  var q=current(); if(!q)return;
+  q.pinned=true; renderAll();
+  toast('已上屏 #'+q.id+'「'+q.text.slice(0,14)+'…」学生端同步高亮 3 秒','ok');
+});
+
+/* ================= 03 助教：未答清单 + 3 道回顾题 ================= */
+var TYPES=['辨析题','计算小题','反例判断题'];
+$('genBtn').addEventListener('click',function(){
+  var btn=this; btn.disabled=true; btn.textContent='读取未答簇并归类…';
+  $('taOut').innerHTML='<div class="empty" style="margin-top:12px">正在：<br>① 读取未答与「课后答」簇 → ② 按知识点匹配课程章节 → ③ 取热度前 3 生成回顾题</div>';
+  setTimeout(function(){
+    var pending=heatRank(STATE.filter(function(q){return q.st!=='done'}));
+    var done=STATE.filter(function(q){return q.st==='done'}).length;
+    if(!pending.length){
+      $('taOut').innerHTML='<div class="empty" style="margin-top:12px">本讲所有疑问均已标记为「已答」，无需课后清单。</div>';
+      btn.disabled=false; btn.textContent='生成清单 + 3 道回顾题'; return;
+    }
+    // 按章节归类
+    var order=[], map={};
+    pending.forEach(function(q){
+      var k=q.sec||'待归类';
+      if(!map[k]){map[k]=[];order.push(k)}
+      map[k].push(q);
+    });
+    var total=pending.length;
+    var cov=Math.round(order.filter(function(k){return k!=='待归类'}).length/order.length*100);
+    var html='<div class="secgrp"><div class="sechead">未答问题清单 <span class="n">'+total+' 条 / '+order.length+' 个知识点</span>'
+      +'<span class="pill">归类覆盖率 '+cov+'% · ≥90%</span></div>';
+    order.forEach(function(k){
+      html+='<div style="margin-bottom:12px"><div style="font-size:12.5px;color:var(--dim);margin-bottom:6px">'
+        +'<b style="color:var(--acc)">'+esc(k)+'</b> · '+map[k].length+' 条</div>';
+      map[k].forEach(function(q){
+        html+='<div class="qcard" style="margin-bottom:7px"><div class="no">#'+q.id+'</div><div class="bd">'
+          +'<p class="tx" style="font-size:13.5px">'+esc(q.text)+'</p>'
+          +'<div class="mt">'+tagOf(q)+'</div></div></div>';
+      });
+      html+='</div>';
+    });
+    html+='</div>';
+    // 3 道回顾题
+    html+='<div class="secgrp"><div class="sechead">下节课开头回顾题 <span class="n">3 道</span>'
+      +'<span class="pill">各 ≤120 秒可讲完</span></div>';
+    var top3=pending.slice(0,3);
+    top3.forEach(function(q,i){
+      var ty=TYPES[i%3];
+      var ask=q.ask || ('围绕「'+q.text.replace(/？$/,'')+'」给出 30 秒的判断说明');
+      var pts=(q.pts && q.pts.length) ? q.pts : ['回到定义，指出该问法漏掉的前提','补一个可在板书上当场演算的最小例子'];
+      html+='<div class="rv"><div class="rh"><span class="ty">'+ty+'</span>'
+        +'<span>第 '+(i+1)+' 题 · 建议用时 '+[90,120,60][i%3]+'s</span></div>'
+        +'<div style="font-size:13.5px;margin:4px 0 7px">'+esc(ask)+'</div>'
+        +'<ul>'+pts.map(function(p){return '<li>'+esc(p)+'</li>'}).join('')+'</ul>'
+        +'<div style="font-size:11.5px;color:var(--dim2);margin-top:7px">来源：#'+q.id+' 号疑问 · +'+q.n+' 人有同样疑问 · 提问时刻 '+fmt(q.t)+'</div></div>';
+    });
+    html+='</div>';
+    html+='<div class="note">导出包只含问题文本、匿名计数、知识点与时刻戳；不含学生姓名、学号、IP 与设备指纹，校外域名不可回调。</div>';
+    $('taOut').innerHTML=html;
+    $('copyBtn').disabled=false;
+    $('cRv').textContent='3';
+    btn.disabled=false; btn.textContent='生成清单 + 3 道回顾题';
+    toast('清单已生成：'+total+' 条未答归入 '+order.length+' 个知识点 + 3 道回顾题','ok');
+    window.__md = buildMD(order,map,top3,pending,done);
+  }, 1200);
+});
+function buildMD(order,map,top3,pending,done){
+  var s='# 第 7 讲《虚功原理与约束反力》未答问题清单\n\n';
+  s+='> 共 '+pending.length+' 条未答 / 课后答，已答 '+done+' 条；导出包不含任何身份字段。\n\n';
+  order.forEach(function(k){
+    s+='## '+k+'（'+map[k].length+' 条）\n';
+    map[k].forEach(function(q){ s+='- #'+q.id+' '+q.text+' — +'+q.n+' 人 · '+fmt(q.t)+'\n' });
+    s+='\n';
+  });
+  s+='## 下节课开头回顾题（3 道）\n\n';
+  top3.forEach(function(q,i){
+    s+=(i+1)+'. ['+TYPES[i%3]+' / '+[90,120,60][i%3]+'s] '+(q.ask||q.text)+'\n';
+    s+='   来源：#'+q.id+' · +'+q.n+' 人 · '+fmt(q.t)+'\n';
+    (q.pts||[]).forEach(function(p){ s+='   - 答点：'+p+'\n' });
+    s+='\n';
+  });
+  return s;
+}
+$('copyBtn').addEventListener('click',function(){
+  if(!window.__md){toast('请先生成清单','warn');return}
+  var ta=document.createElement('textarea'); ta.value=window.__md;
+  ta.style.position='fixed'; ta.style.left='-9999px'; document.body.appendChild(ta);
+  ta.select(); var ok=false;
+  try{ ok=document.execCommand('copy') }catch(e){ ok=false }
+  document.body.removeChild(ta);
+  toast(ok?'清单 Markdown 已复制到剪贴板':'复制失败，请手动选择文本', ok?'ok':'warn');
+});
+
+/* ================= 04 回放 ================= */
+function sliceAt(t){
+  var pick=SLICES[0];
+  SLICES.forEach(function(s){ if(t>=s.t) pick=s });
+  return pick;
+}
+var art={
+  title:'<svg viewBox="0 0 640 210"><g class="stroke" stroke="#2F6F78"><path d="M40 60 H600"/></g>'
+    +'<text x="40" y="46" font-size="20" fill="#2F6F78">第 7 讲 · 虚功原理</text>'
+    +'<text x="40" y="105" font-size="28">δW = Σ Fᵢ · δrᵢ = 0</text>'
+    +'<text x="40" y="150" font-size="18" fill="#6E7470">静力学普遍的平衡判据</text>'
+    +'<g class="light"><path d="M40 168 H560"/></g></svg>',
+  delta:'<svg viewBox="0 0 640 210"><text x="30" y="40" font-size="20" fill="#2F6F78">2.1 虚位移</text>'
+    +'<text x="30" y="88" font-size="24">δrᵢ ：约束允许的、假想的无穷小位移</text>'
+    +'<g class="box"><rect x="30" y="108" width="300" height="70" rx="8"/></g>'
+    +'<path class="stroke" d="M60 165 q60 -60 120 -10 q60 50 110 -30"/>'
+    +'<circle cx="60" cy="165" r="5" fill="#2F6F78"/><circle cx="290" cy="125" r="5" fill="#2F6F78"/>'
+    +'<text x="360" y="130" font-size="18" fill="#6E7470">不是真实运动，</text>'
+    +'<text x="360" y="160" font-size="18" fill="#6E7470">也不消耗时间</text></svg>',
+  ideal:'<svg viewBox="0 0 640 210"><text x="30" y="40" font-size="20" fill="#2F6F78">2.3 理想约束</text>'
+    +'<text x="30" y="84" font-size="24">Σ Rᵢ · δrᵢ = 0</text>'
+    +'<rect class="hl" x="300" y="60" width="250" height="36" rx="6"/>'
+    +'<text x="312" y="84" font-size="17" fill="#A9752B">问题热点 #2 在此</text>'
+    +'<text x="30" y="130" font-size="18">光滑铰 / 刚性杆 / 不可伸绳 → 约束力不做虚功</text>'
+    +'<g class="stroke"><path d="M30 160 H420"/></g>'
+    +'<text x="30" y="192" font-size="17" fill="#6E7470">含摩擦时：把耗散功移到方程右端</text></svg>',
+  prin:'<svg viewBox="0 0 640 210"><text x="30" y="38" font-size="20" fill="#2F6F78">2.4 原理表述</text>'
+    +'<text x="30" y="82" font-size="24">平衡的充要条件：所有主动力虚功之和为零</text>'
+    +'<g class="stroke"><path d="M40 110 H600"/></g>'
+    +'<text x="40" y="146" font-size="19">自由度 q 个 → 只需 q 个方程</text>'
+    +'<text x="40" y="180" font-size="19">未知约束力被自动消去</text></svg>',
+  ex:'<svg viewBox="0 0 640 210"><text x="30" y="38" font-size="20" fill="#2F6F78">3 · 例题</text>'
+    +'<path class="stroke" d="M60 170 L200 170 L200 90 Z"/>'
+    +'<path class="light" d="M60 170 L200 90"/><path class="light" d="M200 170 H340"/>'
+    +'<text x="215" y="185" font-size="17">θ</text><text x="120" y="196" font-size="17">地面</text>'
+    +'<text x="360" y="100" font-size="20">第三步：</text>'
+    +'<text x="360" y="132" font-size="20">δr 取相对于同一 θ 正向</text>'
+    +'<text x="360" y="164" font-size="18" fill="#A9752B">↑ 此处出现 #4 的同号疑问</text></svg>',
+  sum:'<svg viewBox="0 0 640 210"><text x="30" y="38" font-size="20" fill="#2F6F78">6 · 小结与易错点</text>'
+    +'<g class="stroke"><path d="M40 70 H600"/></g>'
+    +'<text x="40" y="106" font-size="19">① 虚位移必须满足约束</text>'
+    +'<text x="40" y="140" font-size="19">② 理想约束才消去反力</text>'
+    +'<text x="40" y="174" font-size="19">③ 独立坐标不得各自约定正方向</text></svg>'
+};
+function setBoard(sl){
+  $('boardBox').innerHTML = art[sl.svg] || art.title;
+  $('sliceName').textContent = sl.name;
+  $('sliceTm').textContent = fmt(sl.t);
+}
+function sync(){
+  $('pb').firstElementChild.style.width = (playT/DUR*100).toFixed(2)+'%';
+  $('curTm').textContent = fmt(playT);
+  var sl=sliceAt(playT);
+  if($('boardBox').dataset.k!==sl.svg){ $('boardBox').dataset.k=sl.svg; setBoard(sl) }
+  // 时刻标记
+  var old=$('pb').querySelectorAll('.mk'); for(var i=0;i<old.length;i++)old[i].remove();
+  STATE.forEach(function(q){
+    var m=document.createElement('i'); m.className='mk';
+    m.style.left=(q.t/DUR*100)+'%'; $('pb').appendChild(m);
+  });
+  var hit=null; STATE.forEach(function(q){ if(Math.abs(q.t-playT)<=3) hit=q });
+  $('nowSec').textContent = hit ? ('命中 #'+hit.id+' 提问时刻') : (sl.name.split(' ')[0]);
+}
+function jump(t){
+  playT=Math.max(0,Math.min(DUR,t)); sync();
+  var q=null,best=1e9;
+  STATE.forEach(function(x){ var d=Math.abs(x.t-playT); if(d<best){best=d;q=x} });
+  if(q) curQ=q.id;
+  play(true); renderAll();
+}
+$('repList').addEventListener('click',function(e){
+  var c=e.target.closest? e.target.closest('[data-jump]'):null; if(!c)return;
+  curQ=parseInt(c.dataset.qid,10);
+  jump(parseInt(c.dataset.jump,10));
+  toast('跳转至 '+fmt(parseInt(c.dataset.jump,10))+' · 已切换同步板书切片');
+});
+$('playBtn').addEventListener('click',function(){ play(!playing) });
+function play(on){
+  playing=on; $('playBtn').textContent=on?'暂停':'播放';
+  clearInterval(playTimer);
+  if(on){ playTimer=setInterval(function(){
+    playT+=1; if(playT>=DUR){playT=DUR;play(false)}
+    sync();
+  },100) }
+}
+$('backBtn').addEventListener('click',function(){ jump(playT-10) });
+$('fwdBtn').addEventListener('click',function(){ jump(playT+10) });
+$('pb').addEventListener('click',function(e){
+  var r=this.getBoundingClientRect();
+  jump((e.clientX-r.left)/r.width*DUR);
+});
+
+/* ================= 05 后台 ================= */
+$('exportBtn').addEventListener('click',function(){
+  toast('已生成 ec-L7-anon.csv：仅含 匿名计数 / 知识点 / 时刻戳，0 个身份字段','ok');
+});
+document.querySelectorAll('.sw .st.lock').forEach(function(el){
+  el.style.cursor='not-allowed';
+  el.addEventListener('click',function(){ toast('该采集项为系统级禁用，管理员也无法开启') });
+});
+
+/* ================= 顶部：视图 / 投影 / 模拟 ================= */
+document.querySelectorAll('nav.tabs button').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('nav.tabs button').forEach(function(x){x.classList.remove('on')});
+    this.classList.add('on');
+    document.querySelectorAll('.view').forEach(function(v){v.classList.remove('on')});
+    $('v-'+this.dataset.v).classList.add('on');
+  });
+});
+function toggleProj(){
+  document.body.classList.toggle('proj');
+  var on=document.body.classList.contains('proj');
+  $('projBtn').textContent = on? '退出投影模式' : '投影模式';
+  $('projBtn2').textContent = on? '退出投影大字模式' : '切换投影大字模式';
+  toast(on?'已进入投影模式：深色高对比 + 大字（正文字号 +40%）':'已恢复轻量浅色卡片流');
+}
+$('projBtn').addEventListener('click',toggleProj);
+$('projBtn2').addEventListener('click',toggleProj);
+$('simBtn').addEventListener('click',function(){
+  simOn=!simOn; this.textContent='模拟课堂：'+(simOn?'开':'关');
+  if(simOn){
+    simTimer=setInterval(function(){
+      var q=STATE[Math.floor(Math.random()*STATE.length)];
+      q.n++;
+      $('onlinePill').textContent='在线 '+(280+Math.floor(Math.random()*20))+' / 300';
+      renderAll();
+    },5000);
+    toast('已开启课堂模拟：每 5 秒随机一名同学匿名提问/ +1');
+  }else{
+    clearInterval(simTimer);
+    toast('已停止模拟');
+  }
+});
+
+/* ================= 二维码 & 初始化 ================= */
+function drawQR(){
+  var n=21,cell=4,pad=4,size=n*cell+pad*2;
+  var s='';
+  s+='<rect width="'+size+'" height="'+size+'" fill="#fff"/>';
+  function finder(x,y){
+    s+='<rect x="'+(pad+x*cell)+'" y="'+(pad+y*cell)+'" width="'+(7*cell)+'" height="'+(7*cell)+'" fill="#2A2E2C"/>';
+    s+='<rect x="'+(pad+(x+1)*cell)+'" y="'+(pad+(y+1)*cell)+'" width="'+(5*cell)+'" height="'+(5*cell)+'" fill="#fff"/>';
+    s+='<rect x="'+(pad+(x+2)*cell)+'" y="'+(pad+(y+2)*cell)+'" width="'+(3*cell)+'" height="'+(3*cell)+'" fill="#2A2E2C"/>';
+  }
+  finder(0,0); finder(14,0); finder(0,14);
+  var seed=7;
+  function rnd(){ seed=(seed*9301+49297)%233280; return seed/233280 }
+  for(var i=0;i<n;i++)for(var j=0;j<n;j++){
+    if((i<8&&j<8)||(i<8&&j>12)||(i>12&&j<8))continue;
+    if(rnd()>0.52) s+='<rect x="'+(pad+i*cell)+'" y="'+(pad+j*cell)+'" width="'+cell+'" height="'+cell+'" fill="#2A2E2C"/>';
+  }
+  return '<svg viewBox="0 0 '+size+' '+size+'" width="100%" height="100%">'+s+'</svg>';
+}
+$('qrBox').innerHTML=drawQR();
+setInterval(function(){
+  if(clock<DUR) clock++;
+  $('liveClock').textContent=fmt(clock);
+},1000);
+var left=372;
+setInterval(function(){
+  left--; if(left<0)left=600;
+  $('qrLeft').textContent=fmt(left);
+},1000);
+
+setBoard(SLICES[0]);
+curQ = heatRank(STATE)[0].id;   // 教师端默认选中热度第一，连点即可连续处理
+renderAll();
+sync();
+</script>
+</body>
+</html>
